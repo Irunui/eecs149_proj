@@ -30,69 +30,252 @@ int colorNeighbors(int i, int j, int indice, Mat& map, vector<pair<int, int>> &k
 }
 
 /*
+ * GET Homography between kobuki reference image and kobuki detected
+ */
+Mat get_kobuki_homography(Mat kobuki_im) {
+    Mat I1 = kobuki_reference_im;
+    Ptr<AKAZE> D = AKAZE::create();
+    vector<KeyPoint> kp1, kp2;
+    Mat desc1, desc2;
+    D->detectAndCompute(I1, noArray(), kp1, desc1);
+    D->detectAndCompute(kobuki_im, noArray(), kp2, desc2);
+    
+    if (kp1.size()>0 && kp2.size()>0) {
+        Mat J;
+
+        // find and filter matches
+        BFMatcher M(NORM_HAMMING);
+        vector<vector<DMatch>> nn_matches;
+        vector <DMatch> good_matches;
+        vector<KeyPoint> kp_1, kp_2;
+        int j = 0;
+        M.knnMatch(desc1, desc2, nn_matches, 2);
+        for (int i = 0; i < nn_matches.size() && kp2.size()!=0; i++) {
+            cout << i << endl;
+                DMatch first = nn_matches[i][0];
+                float dist1 = nn_matches[i][0].distance;
+                float dist2 = nn_matches[i][1].distance;
+                if (dist1 < 0.6 * dist2) {
+                        kp_1.push_back(kp1[first.queryIdx]);
+                        kp_2.push_back(kp2[first.trainIdx]);
+                        good_matches.push_back(DMatch(j,j,0));
+                        j++;
+                }
+        }
+
+//        // drawMatches ...
+//        Mat J2;
+//        drawMatches(I1, kp_1, kobuki_im, kp_2, good_matches, J2);
+//        namedWindow("J", 1);
+//        waitKey(0);
+
+        // find homography
+        if (kp_1.size()< 4) {
+            return Mat();
+        }
+        vector<Point2f> KP1, KP2;
+        for (int i = 0; i < kp_1.size(); i++) {
+                KP1.push_back(kp_1[i].pt);
+                KP2.push_back(kp_2[i].pt); 
+        }
+        Mat H = findHomography(KP1, KP2, CV_RANSAC);
+
+        // find inliers and new homography
+        vector<Point2f> inliers1, inliers2;
+        for (int i = 0; i < kp_1.size(); i++) {
+                Mat pt = Mat::ones(3, 1, CV_64F);
+                pt.at<double>(0) = KP1[i].x;
+                pt.at<double>(1) = KP1[i].y;
+                pt = H * pt;
+                pt /= pt.at<double>(2);
+                float d = sqrt(pow(pt.at<double>(0) - KP2[i].x, 2) + pow(pt.at<double>(1) - KP2[i].y, 2));
+                if (d < 1) {
+                        inliers1.push_back(KP1[i]);
+                        inliers2.push_back(KP2[i]);
+                }
+        }
+        
+        if (inliers1.size() < 4) {
+            return Mat();
+        }
+        H = findHomography(inliers1, inliers2, CV_RANSAC);
+        return H;
+    } else {
+        return Mat();
+    }
+}
+
+/*
+ * GET Kobuki center position from reference homography
+ */
+
+Point2f get_kobuki_center(Mat H) {
+    Mat I1 = kobuki_reference_im;
+    Point2f center1 = Point2f(I1.rows/2, I1.cols/2);
+    return computePositionOnGrid(center1.x, center1.y, H);
+}
+
+/*
+ * GET Kobuki angle from reference homography
+ */
+float get_kobuki_angle(Mat H) {
+    Mat I1 = kobuki_reference_im;
+    Point2f center1 = Point2f(I1.rows/2, I1.cols/2);
+    Point2f top1 = Point2f(I1.rows, I1.cols/2);
+    Point2f center2 = computePositionOnGrid(center1.x, center1.y, H);
+    Point2f top2 = computePositionOnGrid(top1.x, top1.y, H);
+
+    const float PI = 3.1415;
+    float tangente = (top2.y-center2.y)/(top2.x-center2.x);
+    float cosinus = (top2.x-center2.x);
+    float angle = atan(tangente); // angle between -PI/2 and PI/2
+    cout << angle << endl;
+    if (cosinus<0) {
+        angle += PI;// angle between -PI/2 and 3PI/2
+    }
+    if (angle < 0) {
+        angle += 2*PI; //angle between 0 and 2PI
+    }
+    angle *= 180/PI; // angle between 0 and 360°
+    cout << angle << "°" << endl;
+    return angle;
+}
+
+
+/*
  * Given a set of points representing one Kobuki, computes the position of the center of the Kobuki
  */
-Point2f coordinates(vector<pair<int, int>> kobuki, int height, int width, Mat& I, Mat H) {
-	int max_x = 0;
-        int min_x = 100000;
-	int max_y = 0;
-        int min_y = 1000000;
-        int x=0, y =0;
-	int nb = 0;
+Kobuki coordinates(vector<pair<int, int>> kobuki, int height, int width, Mat& I, Mat H) {
+    const int FILTER = 10;
+    int max_x = 0;
+    int min_x = 100000;
+    int max_y = 0;
+    int min_y = 1000000;
+    int x=0, y =0;
+    int nb = 0;
+    int x_at_bottom[FILTER], y_at_bottom[FILTER];
+    
+    for (int i=0 ; i<FILTER ; i++) {
+        x_at_bottom[i] = 0;
+    }
 
         // This technique uses several coordinates and try to find the center position directly on the image
-	for (vector<pair<int, int>>::iterator itr = kobuki.begin(); itr < kobuki.end(); ++itr)
-	{
-		pair<int, int> pt = *itr;
-		if (pt.first > max_x) {
-			max_x = pt.first;
-		}
-                if (pt.first < min_x) {
-			min_x = pt.first;
-		}
-                if (pt.second > max_y) {
-			max_y = pt.second;
-		}
-                if (pt.second < min_y) {
-			min_y = pt.second;
-		}
-	}
-        int radius = (max_y - min_y)/2;
-	Point m((max_y-radius)*width, (max_x-radius)*height);
-	circle(I, m, 6, Scalar(0, 0, 255), 2);
-        
-        x = (max_x-radius)*height;
-        y = (max_y-radius)*width;
-
-	return computePositionOnGrid(y, x, H);
-        
-//        // This technique uses the bottom position, converts it in grid coordinates and uses a known radius for Kobuki
-//        for (vector<pair<int, int>>::iterator itr = kobuki.begin(); itr < kobuki.end(); ++itr)
+//	for (vector<pair<int, int>>::iterator itr = kobuki.begin(); itr < kobuki.end(); ++itr)
 //	{
-//            pair<int, int> pt = *itr;
-//            if (pt.first > max_x) {
-//                    max_x = pt.first;
-//                    y = pt.second;
-//            }
+//		pair<int, int> pt = *itr;
+//		if (pt.first > max_x) {
+//			max_x = pt.first;
+//		}
+//                if (pt.first < min_x) {
+//			min_x = pt.first;
+//		}
+//                if (pt.second > max_y) {
+//			max_y = pt.second;
+//		}
+//                if (pt.second < min_y) {
+//			min_y = pt.second;
+//		}
 //	}
+//        int radius = (max_y - min_y)/2;
+//	Point m((max_y-radius)*width, (max_x-radius)*height);
+//	circle(I, m, 6, Scalar(0, 0, 255), 2);
 //        
-//        Point2f m = computePositionOnGrid(y,max_x,H);
+//        x = (max_x-radius)*height;
+//        y = (max_y-radius)*width;
+//
+//	return computePositionOnGrid(y, x, H);
         
+        // This technique uses the bottom position, converts it in grid coordinates and uses a known radius for Kobuki
+    for (vector<pair<int, int>>::iterator itr = kobuki.begin(); itr < kobuki.end(); ++itr)
+    {
+        pair<int, int> pt = *itr;
+        for(int i=0 ; i<FILTER; i++) {
+            if (x_at_bottom[i]<pt.first) {
+                for (int j=FILTER-2; j>=i ; j--) {
+                    x_at_bottom[j+1] = x_at_bottom[j];
+                    y_at_bottom[j+1] = y_at_bottom[j];
+                }
+                x_at_bottom[i] = pt.first;
+                y_at_bottom[i] = pt.second;
+                break;
+            }
+        }
+        if (pt.first < min_x) {
+            min_x = pt.first;
+        }
+        if (pt.first > max_x) {
+                max_x = pt.first;
+        }
+        if (pt.second > max_y) {
+            max_y = pt.second;
+        }
+        if (pt.second < min_y) {
+            min_y = pt.second;
+        }
+    }
+        
+    x=0;
+    y=0;
+    int count = 0;
+    for (int j=0; j<FILTER; j++) {
+        if (x_at_bottom[j]!=0) {
+            x += x_at_bottom[j];
+            y += y_at_bottom[j];
+            count ++;
+        } else {
+            break;
+        }
+    }
+    x /= count;
+    y /= count;
+    
+    
+
+    
+    Mat kobukiIm;
+    float WINDOW = 1.2;
+    getRectSubPix(I, Size((max_y-min_y)*WINDOW*width, (max_x-min_x)*WINDOW*height), Point2f((max_y+min_y)/2*width,(max_x+min_x)/2*height), kobukiIm);
+    Mat H_kobuki = get_kobuki_homography(kobukiIm); 
+    if (H_kobuki.rows > 1) {
+        Point2f center_rect = get_kobuki_center(H_kobuki);
+        float x_center = center_rect.x+(max_y+min_y)/2*width - (max_y-min_y)*WINDOW*width/2;
+        float y_center = center_rect.y + (max_x+min_x)/2*height - (max_x-min_x)*WINDOW*height/2;
+        circle(I, Point2f(x_center,y_center), 6, Scalar(0, 0, 255), 2);
+        float angle = get_kobuki_angle(H_kobuki);
+        imshow("kobuki", kobukiIm);
+        imshow("i", I);
+        waitKey(0);
+        
+    
+        Point2f m = computePositionOnGrid(x_center,y_center,H);
+
+        Mat terrain = imread("images/grid.jpg");
+        cout << m.x << " " << KOBUKI_REAL_RADIUS/GRID_REAL_HEIGHT * terrain.rows << endl;
+        m.y -= KOBUKI_REAL_RADIUS/GRID_REAL_HEIGHT * terrain.rows;
+        Kobuki res = Kobuki();
+        res.x = m.x;
+        res.y = m.y;
+        res.angle = angle;
+        res.timestamp = 0;
+        return res; 
+    } else {
+        return Kobuki();
+    }
 }
 
 /*
  * Compute the coordinates of all Kobukis 
  */
-vector<Point2f> createGrid(vector<vector<pair<int, int>>> kobukis, int height, int width, Mat im, Mat H) {
+vector<Kobuki> createGrid(vector<vector<pair<int, int>>> kobukis, int height, int width, Mat im, Mat H) {
 	Mat terrain = imread("images/grid.jpg");
-        vector<Point2f> points;
+        vector<Kobuki> points;
 	for (vector<vector<pair<int, int>>>::iterator itr = kobukis.begin(); itr < kobukis.end(); ++itr)
 	{
 		vector<pair<int, int>> kobuki = *itr;
-		Point2f pt = coordinates(kobuki, height, width, im, H);
-                if (0<= pt.x && pt.x <= terrain.rows && 0 <= pt.y && pt.y<=terrain.rows) {
+		Kobuki pt = coordinates(kobuki, height, width, im, H);
+                if (0< pt.x && pt.x <= terrain.rows && 0 < pt.y && pt.y<=terrain.rows) {
                     points.push_back(pt);
-                    circle(terrain, pt, 2, Scalar(0, 0, 255), 2);
+                    circle(terrain, Point2f(pt.x, pt.y), 2, Scalar(0, 0, 255), 2);
                 }
 	}
 	//imwrite(image+"TERRAIN.png", terrain);
@@ -106,7 +289,7 @@ vector<Point2f> createGrid(vector<vector<pair<int, int>>> kobukis, int height, i
  * From a webcam image and a previously computed homography, returns the positions
  * of every Kobuki detected within the grid limits
  */
-vector<Point2f> getKobukisPositions(Mat im, Mat homography)
+vector<Kobuki> getKobukisPositions(Mat im, Mat homography)
 {    
     // BACKGROUND SUBSTRACTION USING GRAPH CUT
     Mat I2 = im.clone(); // colored image
@@ -116,7 +299,7 @@ vector<Point2f> getKobukisPositions(Mat im, Mat homography)
 
     Graph<float, float, float> g(m*n + 1, m*n * 2 + 1); // graph used for graphcut algorithm
     g.add_node(m*n);
-
+    
     // Parameters
     Vec3b Iext(133, 148, 170), Ikobuki(100, 70, 0);
     float alpha = 1, beta = 0.1;
@@ -205,7 +388,7 @@ vector<Point2f> getKobukisPositions(Mat im, Mat homography)
             }
         }
     }
-
+    
     // interpreting resulting images to get Kobukis positions
     int indice = 2;
     int nb_kobukis = 0;

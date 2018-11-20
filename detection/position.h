@@ -27,10 +27,17 @@
 using namespace cv;
 using namespace std;
 
-const int KOBUKI_REAL_RADIUS = 250; // Kobuki real size in mm
-const int GRID_REAL_WIDTH = 2500; // grid real width in mm
+const float KOBUKI_REAL_RADIUS = 170.0; // Kobuki real size in mm
+const float GRID_REAL_HEIGHT = 300*5; // grid real width in mm
 
-vector<Point2f> getKobukisPositions(Mat im, Mat homography);
+struct Kobuki {
+    float x, y, angle;
+    int timestamp;
+};
+
+const Mat kobuki_reference_im = imread("images/top 1 (copy).jpg", CV_LOAD_IMAGE_GRAYSCALE);
+
+vector<Kobuki> getKobukisPositions(Mat im, Mat homography);
 
 #endif /* POSITION_H */
 
