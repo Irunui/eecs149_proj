@@ -1,5 +1,13 @@
 
-      case OBSTACLES_BACK_UP: {
+       } else if (sensors.bumps_wheelDrops.bumpLeft || sensors.bumps_wheelDrops.bumpRight || sensors.bumps_wheelDrops.bumpCenter) {
+          state_rand = OBSTACLES_BACK_UP;
+          display_write("OBSTACLE", DISPLAY_LINE_0);
+          if (!sensors.bumps_wheelDrops.bumpCenter){
+            left = sensors.bumps_wheelDrops.bumpLeft && !sensors.bumps_wheelDrops.bumpRight;
+          }
+          prev_encoder = sensors.rightWheelEncoder;
+     
+     case OBSTACLES_BACK_UP: {
         next_encoder = sensors.rightWheelEncoder;
         distance = measure_negative_distance(next_encoder, prev_encoder);
         char buf[16];
