@@ -18,6 +18,10 @@ message_queued = False
 kobuki_moving = False
 run = 1
 
+current_gesture=""
+gesture_id=0
+last_gesture_id=0
+
 def float_to_hex(f):
     return hex(struct.unpack('<I', struct.pack('<f', f))[0]).lstrip("0x")
 
@@ -54,7 +58,7 @@ def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
     return tx_id + 1
 
 def on_message(client, userdata, message):
-    global currPos, currDeg, kobuki_id, message_queued, prev_xPos, prev_yPos, kobuki_moving, prevDeg
+    global currPos, currDeg, kobuki_id, message_queued, prev_xPos, prev_yPos, kobuki_moving, prevDeg, current_gesture, gesture_id, last_gesture_id
     #print "Message received"
     if (message.topic == "kobuki"):
         payload = str(message.payload.decode("utf-8"))
@@ -84,10 +88,13 @@ def on_message(client, userdata, message):
             else:
                 kobuki_moving = True
                 count += 1
+    if (message.topic == "gesture"):
+        current_gesture = str(message.payload.decode("utf-8"))
+        gesture_id += 1
 
 
 def main():
-    global prev_xPos, prev_yPos, run, currPos, kobuki_id, currDeg, targetDeg
+    global prev_xPos, prev_yPos, run, currPos, kobuki_id, currDeg, targetDeg, currentGesture, gesture_id, last_gesture_id, current_gesture, gesture_id, last_gesture_id
     #message_queued = False
     os.system("sudo hcitool dev")
     print("Creating MQTT mqtt_client")
@@ -95,9 +102,15 @@ def main():
     mqtt_client.connect("localhost")    #128.32.44.126
     mqtt_client.loop_start()
     mqtt_client.subscribe("kobuki")
+    mqtt_client.subscribe("gesture")
     tx_id = 1
     while(1):
         time.sleep(2)
+        if (gesture_id > last_gesture_id):
+            #HERE WE TAKE ACTION DEPENDING ON THE GESTURE
+            print(current_gesture)
+            last_gesture_id = gesture_id
+            
         if(message_queued):
             master = input("Command: ")
             print("")
