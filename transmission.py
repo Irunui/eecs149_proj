@@ -9,7 +9,7 @@ mqtt_client = mqtt.Client("ble_tx")
 prev_xPos = [0, 0]
 prev_yPos = [0, 0]
 currPos = [(0, 0), (0, 0)]
-targetPos = [(0, 0), (0, 0.5)]
+targetPos = [(0, 0), (0.5, 0)]
 kobuki_id = [0]
 prevDeg = [0, 0]
 currDeg = [0, 0]
@@ -17,6 +17,9 @@ targetDeg = [0, 0]
 message_queued = False
 kobuki_moving = False
 run = 1
+gesture_id = 0
+current_gesture = "None"
+master = 0
 
 def float_to_hex(f):
     return hex(struct.unpack('<I', struct.pack('<f', f))[0]).lstrip("0x")
@@ -25,7 +28,7 @@ def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
     global prev_xPos, prev_yPos, prevDeg, message_queued
 
     message_queued = False
-    if(abs(currPos[0]-targetPos[0])>0.1 or abs(currPos[1]-targetPos[1])>0.1 or abs(currDeg-targetDeg)>5):
+    if(abs(currPos[0]-targetPos[0])>0.1 or abs(currPos[1]-targetPos[1])>0.1 or abs(currDeg-targetDeg)>5 and master!=2):
 
         if(targetPos != (0,0)):
             initialPos = (float_to_hex(targetPos[0]), float_to_hex(targetPos[1]))
@@ -50,13 +53,12 @@ def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
         os.system(startCommand)
         os.system("sudo hciconfig hci0 leadv 0")
         time.sleep(1)
-        print "Transmission complete"
     return tx_id + 1
 
 def on_message(client, userdata, message):
-    global currPos, currDeg, kobuki_id, message_queued, prev_xPos, prev_yPos, kobuki_moving, prevDeg
-    #print "Message received"
+    global currPos, currDeg, kobuki_id, message_queued, prev_xPos, prev_yPos, kobuki_moving, prevDeg, gesture_id, current_gesture, master
     if (message.topic == "kobuki"):
+        #print "Position Received"
         payload = str(message.payload.decode("utf-8"))
         data = payload.split(';')
         temp_id = int(data[0])
@@ -84,10 +86,24 @@ def on_message(client, userdata, message):
             else:
                 kobuki_moving = True
                 count += 1
+    if (message.topic == "gesture"):
+        print "Gesture Received"
+        current_gesture = str(message.payload.decode("utf-8"))
+        if current_gesture == "ZoomIn":
+            master = 2
+            targetPos[0] = (0, 0)
+            targetPos[1] = (0, 0.5)
+            targetDeg[0] = 180
+            targetDeg[1] = 0
+        elif current_gesture == "ZoomOut":
+            master = 1
+        elif current_gesture == "Off":
+            master = 0
+        gesture_id += 1
 
 
 def main():
-    global prev_xPos, prev_yPos, run, currPos, kobuki_id, currDeg, targetDeg
+    global prev_xPos, prev_yPos, run, currPos, kobuki_id, currDeg, targetDeg, gesture_id, current_gesture, master
     #message_queued = False
     os.system("sudo hcitool dev")
     print("Creating MQTT mqtt_client")
@@ -95,29 +111,38 @@ def main():
     mqtt_client.connect("localhost")    #128.32.44.126
     mqtt_client.loop_start()
     mqtt_client.subscribe("kobuki")
+    mqtt_client.subscribe("gesture")
+    last_gesture_id = 0
     tx_id = 1
     while(1):
-        time.sleep(2)
-        if(message_queued):
-            master = input("Command: ")
-            print("")
-            for i in kobuki_id:
-                if master == 2:
-                    tx_id = ble_tx(i, tx_id, 0, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
-                    time.sleep(0.5)
-                mqtt_client.unsubscribe("kobuki")
-                print("")
-                print("Transmission ID ", tx_id)
-                print("Target Position: ", targetPos[i])
-                print("Current Position: ", currPos[i])
-                print("Current Angle: ", currDeg[i])
-                print("")
-                tx_id = ble_tx(i, tx_id, master, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
-                mqtt_client.subscribe("kobuki")
-            time.sleep(3)
+        if (gesture_id > last_gesture_id):
+            #HERE WE TAKE ACTION DEPENDING ON THE GESTURE
+            print(current_gesture)
+            if(message_queued):
+                for i in kobuki_id:
+                    if master == 2:
+                        tx_id = ble_tx(i, tx_id, 0, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
+                        time.sleep(0.5)
+                    mqtt_client.unsubscribe("kobuki")
+                    print("")
+                    print("Transmission ID ", tx_id)
+                    print("Command: ", master)
+                    print("Target Position: ", targetPos[i])
+                    print("Current Position: ", currPos[i])
+                    print("Current Angle: ", currDeg[i])
+                    print("")
+                    tx_id = ble_tx(i, tx_id, master, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
+                    mqtt_client.subscribe("kobuki")
+                    time.sleep(1.5)
+            last_gesture_id = gesture_id
+        #if(message_queued):
+            #master = input("Command: ")
+            #print("")
         else:
             run = 0
+        time.sleep(2)
         os.system("sudo hciconfig hci0 noleadv")
+        
 
 if __name__ == '__main__':
 	main()
