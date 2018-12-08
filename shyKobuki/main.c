@@ -81,6 +81,7 @@ typedef enum {
 } robot_state_t;
 
 robot_state_t state = OFF;
+robot_state_t previous_state = OFF;
 
 //  BASIC CALCUL FUNCTIONS and constants
 
@@ -190,27 +191,27 @@ void ble_evt_adv_report(ble_evt_t const* p_ble_evt) {
 
   //print the BLE address of the device
   //printf("BLE Address: %X%X%X%X%X%X\n", ble_addr[5], ble_addr[4], ble_addr[3], ble_addr[2], ble_addr[1], ble_addr[0]);
-  if (ble_addr[5] == 0xCC && ble_addr[4] == 0x2F && ble_addr[3] == 0x71 && ble_addr[2] == 0x58) {
+  if (ble_addr[5] == 0xF8 && ble_addr[4] == 0x59 && ble_addr[3] == 0x71 && ble_addr[2] == 0x99) {
     printf("Kobuki ID Received: %d\n", adv_buf[2]);
-    if (adv_buf[2] == 0){     //ID of the Kobuki
+    if (adv_buf[2] == 1){     //ID of the Kobuki
       if(current_rx_id != adv_buf[3]) {
+        display_write("BLE Received", DISPLAY_LINE_0);
         printf("Master Received: %d\n", adv_buf[4]);
         current_rx_id = adv_buf[3];
         master = adv_buf[4];
-        printf("Master: %d\n", master);
+
         temp = (adv_buf[5]<<24) + (adv_buf[6]<<16) + (adv_buf[7]<<8) + adv_buf[8];
         memcpy(&current_x, &temp, 4);
         temp = (adv_buf[9]<<24) + (adv_buf[10]<<16) + (adv_buf[11]<<8) + adv_buf[12];
         memcpy(&current_y, &temp, 4);
-        current_angle = adv_buf[13];
+        current_angle = adv_buf[13]*2;
         //printf("Current x: %f\n", current_x);
         //printf("Current y: %f\n", current_y);
-
         temp = (adv_buf[14]<<24) + (adv_buf[15]<<16) + (adv_buf[16]<<8) + adv_buf[17];
         memcpy(&initial_x, &temp, 4);
         temp = (adv_buf[18]<<24) + (adv_buf[19]<<16) + (adv_buf[20]<<8) + adv_buf[21];
         memcpy(&initial_y, &temp, 4);
-        initial_angle = adv_buf[22];
+        initial_angle = adv_buf[22]*2;
 
         if (adv_buf[23] == 1) {
           inside = true;
@@ -269,6 +270,7 @@ int main(void) {
 
   float random = 0;
   int count = 0;
+  int time = 0;
 
   // initialize Kobuki
   kobukiInit();
@@ -280,6 +282,7 @@ int main(void) {
 
   float deviation = 0;
   float distance = 0;
+  float distanceObstacle = 0;
 
   float speed_correction=0, min_rotation_speed = 50;
 
@@ -326,6 +329,10 @@ int main(void) {
           //printf("ALIGNING\n");
         } else if (master==0) {
             state = OFF;
+        } else if (sensors.bumps_wheelDrops.bumpLeft || sensors.bumps_wheelDrops.bumpRight || sensors.bumps_wheelDrops.bumpCenter) {
+          previous_state = RANDOM;
+          state = OBSTACLE_BACK_UP;
+          distanceObstacle = 0;
         } else {
           display_write("I SEE NO ONE", DISPLAY_LINE_0);
           //kobukiDriveDirect(0,0);
@@ -334,13 +341,13 @@ int main(void) {
           printf("Random: %f\n", random);
           if(count >= 30) {
             random = (float)((double)rand())/((double) RAND_MAX);
-            if(random <= 0.20) {
+            if(random <= 0.35) {
               //printf("Forward\n");
               kobukiDriveDirect(50,50);
-            } else if (random <= 0.4 && random > 0.2) {
+            } else if (random <= 0.55 && random > 0.35) {
               //printf("Turn Left\n");
               kobukiDriveDirect(40,-40);
-            } else if (random <= 0.6 && random > 0.4){
+            } else if (random <= 0.75 && random > 0.55){
               //printf("Turn Right\n");
               kobukiDriveDirect(-40, 40);
             } else {
@@ -357,7 +364,7 @@ int main(void) {
           deviation = mpu9250_read_gyro_integration().z_axis;
 
           // displaying angle remaining to turn
-          display_write("ALIGNING", DISPLAY_LINE_0);
+          display_write("SOMEONES THERE!", DISPLAY_LINE_0);
           char buf[16];
           snprintf(buf,16,"%f", angle_to_turn-deviation);
           display_write(buf, DISPLAY_LINE_1);
@@ -365,6 +372,10 @@ int main(void) {
           if (is_button_pressed(&sensors) || master==0) { // if we stop manually
             state = OFF;
             display_write("", DISPLAY_LINE_1);
+          } else if (sensors.bumps_wheelDrops.bumpLeft || sensors.bumps_wheelDrops.bumpRight || sensors.bumps_wheelDrops.bumpCenter) {
+            previous_state = ALIGNING;
+            state = OBSTACLE_BACK_UP;
+            distanceObstacle = 0;
           } else if (abs(deviation) >= abs(angle_to_turn)) { // if we turned enough
             state = GOING_BACK;
             prev_encoder = sensors.rightWheelEncoder;
@@ -401,6 +412,10 @@ int main(void) {
         if (is_button_pressed(&sensors) || master==0) {
           state = OFF;
           display_write("", DISPLAY_LINE_1);
+        } else if (sensors.bumps_wheelDrops.bumpLeft || sensors.bumps_wheelDrops.bumpRight || sensors.bumps_wheelDrops.bumpCenter) {
+          previous_state = GOING_BACK;
+          state = OBSTACLE_BACK_UP;
+          distanceObstacle = 0;
         } else if (distance >= distance_to_target) {
           state = ORIENTING;
           deviation = 0;
@@ -431,6 +446,10 @@ int main(void) {
         if (is_button_pressed(&sensors) || master==0) {
           state = OFF;
           display_write("", DISPLAY_LINE_1);
+        } else if (sensors.bumps_wheelDrops.bumpLeft || sensors.bumps_wheelDrops.bumpRight || sensors.bumps_wheelDrops.bumpCenter) {
+          previous_state = ORIENTING;
+          state = OBSTACLE_BACK_UP;
+          distanceObstacle = 0;
         } else if (abs(deviation-angle_to_turn) >= abs(final_alpha-angle_to_turn)) {
             state = OFF;
             display_write("", DISPLAY_LINE_1);
@@ -451,6 +470,29 @@ int main(void) {
             // turning
             kobukiDriveDirect(-s,s);
             state = ORIENTING;
+        }
+        break;
+      }
+
+      case OBSTACLE_BACK_UP: {
+        uint16_t next_encoder = sensors.rightWheelEncoder;
+        distanceObstacle = measure_negative_distance(next_encoder, prev_encoder);
+        char buf[16];
+        snprintf(buf,16,"%f", distance);
+        display_write(buf, DISPLAY_LINE_1);
+        if (is_button_pressed(&sensors)) {
+          state = OFF;
+          display_write("", DISPLAY_LINE_1);
+        } else if (distanceObstacle >= 0.05) {
+          kobukiDriveDirect(0,0);
+          if(time > 10){
+            state = previous_state;
+          }
+        } else {
+          // perform state-specific actions here
+          display_write("OBSTACLE", DISPLAY_LINE_0);
+          kobukiDriveDirect(-50,-50);
+          state = OBSTACLE_BACK_UP;
         }
         break;
       }
