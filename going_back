@@ -1,0 +1,322 @@
+
+// GOING BACK TO INITIAL POSITION 
+//
+// Framework for creating applications that control the Kobuki robot
+
+#include <math.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <time.h>
+
+#include "app_error.h"
+#include "app_timer.h"
+#include "nrf.h"
+#include "nrf_delay.h"
+#include "nrf_gpio.h"
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
+#include "nrf_pwr_mgmt.h"
+#include "nrf_drv_spi.h"
+
+#include "buckler.h"
+#include "display.h"
+#include "kobukiActuator.h"
+#include "kobukiSensorPoll.h"
+#include "kobukiSensorTypes.h"
+#include "kobukiUtilities.h"
+#include "mpu9250.h"
+
+// I2C manager
+NRF_TWI_MNGR_DEF(twi_mngr_instance, 5, 0);
+
+typedef enum {
+  OFF,
+  ALIGNING,
+  GOING_BACK,
+  ORIENTING
+} robot_state_back;
+
+//  BASIC CALCUL FUNCTIONS and constants
+
+float Pi = M_PI;
+
+static int sgn(float number) {
+  if (number > 0) {
+    return 1;
+  }
+  else {
+    return -1;
+  }
+}
+
+// Generates and prints 'count' random 
+// numbers in range [lower, upper]. 
+static float printRandoms(int lower, int upper,  
+                             int count) 
+{ 
+    int i;
+    float num; 
+    for (i = 0; i < count; i++) { 
+        num = (rand() % 
+          (upper - lower + 1)) + lower; 
+    } 
+    return num; 
+} 
+
+// static robot_state_rand stateRandoms() 
+// { 
+//     int i = floor(printRandoms(1,4,1));
+//     return states[i]; 
+// } 
+
+// static time_rand,distance_rand,angle_rand parameterRandoms(state_rand) 
+// { 
+//     int i = floor(printRandoms(1,6,1));
+//     return states[i]; 
+// } 
+
+
+// MEASURES ON KOBUKI FUNCTIONS (DISTANCE AND ANGLE)
+
+static float measure_distance (uint16_t current_encoder, uint16_t previous_encoder) {
+  const float CONVERSION = 0.00008529;
+  float result;
+  if (current_encoder < previous_encoder) {
+    result = (0xFFFF - previous_encoder + current_encoder) * CONVERSION;
+  } else {
+    result = (current_encoder - previous_encoder) * CONVERSION;
+  }
+
+  if( result > 5){
+    return 0;
+  }
+  return result;
+}
+
+static float measure_negative_distance (uint16_t current_encoder, uint16_t previous_encoder) {
+  const float CONVERSION = 0.00008529;
+  float result;
+  if (previous_encoder < current_encoder) {
+    result = (0xFFFF - current_encoder + previous_encoder) * CONVERSION;
+  } else {
+    result = (previous_encoder - current_encoder) * CONVERSION;
+  }
+
+  if( result > 5){
+    return 0;
+  }
+  return result;
+}
+
+static float measure_angle (float angle) {
+  const float CONVERSION = 0.056;
+  float result;
+  result = angle + (angle * CONVERSION);
+  return result;
+  }
+
+
+
+int main(void) {
+  ret_code_t error_code = NRF_SUCCESS;
+
+  // initialize RTT library
+  error_code = NRF_LOG_INIT(NULL);
+  APP_ERROR_CHECK(error_code);
+  NRF_LOG_DEFAULT_BACKENDS_INIT();
+  printf("Log initialized!\n");
+
+  // initialize LEDs
+  nrf_gpio_pin_dir_set(23, NRF_GPIO_PIN_DIR_OUTPUT);
+  nrf_gpio_pin_dir_set(24, NRF_GPIO_PIN_DIR_OUTPUT);
+  nrf_gpio_pin_dir_set(25, NRF_GPIO_PIN_DIR_OUTPUT);
+
+  // initialize display
+  nrf_drv_spi_t spi_instance = NRF_DRV_SPI_INSTANCE(1);
+  nrf_drv_spi_config_t spi_config = {
+    .sck_pin = BUCKLER_LCD_SCLK,
+    .mosi_pin = BUCKLER_LCD_MOSI,
+    .miso_pin = BUCKLER_LCD_MISO,
+    .ss_pin = BUCKLER_LCD_CS,
+    .irq_priority = NRFX_SPI_DEFAULT_CONFIG_IRQ_PRIORITY,
+    .orc = 0,
+    .frequency = NRF_DRV_SPI_FREQ_4M,
+    .mode = NRF_DRV_SPI_MODE_2,
+    .bit_order = NRF_DRV_SPI_BIT_ORDER_MSB_FIRST
+  };
+  error_code = nrf_drv_spi_init(&spi_instance, &spi_config, NULL, NULL);
+  APP_ERROR_CHECK(error_code);
+  display_init(&spi_instance);
+  display_write("Hello, Huma!n", DISPLAY_LINE_0);
+  printf("Display initialized!\n");
+
+  // initialize i2c master (two wire interface)
+  nrf_drv_twi_config_t i2c_config = NRF_DRV_TWI_DEFAULT_CONFIG;
+  i2c_config.scl = BUCKLER_SENSORS_SCL;
+  i2c_config.sda = BUCKLER_SENSORS_SDA;
+  i2c_config.frequency = NRF_TWIM_FREQ_100K;
+  error_code = nrf_twi_mngr_init(&twi_mngr_instance, &i2c_config);
+  APP_ERROR_CHECK(error_code);
+  mpu9250_init(&twi_mngr_instance);
+  printf("IMU initialized!\n");
+
+  // initialize Kobuki
+  kobukiInit();
+  printf("Kobuki initialized!\n");
+  
+  // INITIAL POSITION 
+  float initial_x = printRandoms(-3, 13, 1);
+  float initial_y = printRandoms(-3, 3, 1);
+  float initial_angle = Pi/2;
+
+  // MAIN COMPUTER DATA CURRENT STATE 
+  bool master = false;
+  float current_angle = 0.1*printRandoms(-180*10, 180*10, 1);
+  float current_x = printRandoms(-10, 10, 1);
+  float current_y = printRandoms(-10, 10, 1);
+ 
+ // VARIABLES DEFINITION 
+  
+  float deviation = 0;
+  float distance = 0;
+  
+  // CALCULUS
+  float theta = (180/Pi)*atan((current_y-initial_y)/(current_x-initial_x));
+  float start_distance = 1;
+  //sqrt((current_y-initial_y)*(current_y-initial_y)+(current_x-initial_x)*(current_x-initial_x));
+  int s = sgn(current_angle-theta);
+  float deviation_1 = 90;
+  deviation_1 = measure_angle(deviation_1);
+  // s*((180+theta)-current_angle);
+  float deviation_2 = -deviation_1;
+  // initial_angle-(Pi+theta);
+
+    // INITIAL CONDITITONS
+  // robot_state_rand state_rand = OFF;
+  robot_state_back state_back = ALIGNING;
+  KobukiSensors_t sensors = {0};
+  uint16_t prev_encoder = 0;
+  
+
+ // DISPLAY RANDOM ANGLES 
+  char buf[16];
+
+    snprintf(buf,16,"%f", deviation_1);
+    display_write(buf, DISPLAY_LINE_1); 
+    nrf_delay_ms(10000);
+
+
+  //   snprintf(buf,16,"%f", theta);
+  //   display_write(buf, DISPLAY_LINE_1);
+  //   nrf_delay_ms(5000);
+
+
+  //   snprintf(buf,16,"%f", current_angle);
+  //   display_write(buf, DISPLAY_LINE_1);
+  
+
+  //  nrf_delay_ms(5000);
+  //   snprintf(buf,16,"%f", deviation_1);
+  //   display_write(buf, DISPLAY_LINE_1);
+
+  // nrf_delay_ms(5000);
+
+
+  // RANDOM MOTION 
+  float time_rand = printRandoms(0, 3, 1);
+  float distance_rand = 0;
+  float angle_rand = 0;
+   
+   mpu9250_start_gyro_integration();
+
+   kobukiSensorPoll(&sensors);
+
+  
+  // loop forever, running state machine
+  while (1) {
+    // read sensors from robot
+    kobukiSensorPoll(&sensors);
+    nrf_delay_ms(100);
+
+        // HANDLE STATES
+    switch(state_back) {
+
+      case OFF: {
+          // state = ALIGNING; 
+          //  deviation = 0; 
+          // mpu9250_start_gyro_integration();
+          display_write("OFF", DISPLAY_LINE_0);
+          kobukiDriveDirect(0,0);
+          state_back = OFF;
+        break; // each case needs to end with break!
+      }
+    
+      case ALIGNING: {
+        // transition logic
+        deviation = mpu9250_read_gyro_integration().z_axis;
+        char buf[16];
+        snprintf(buf,16,"%f", deviation_1-deviation);
+        display_write(buf, DISPLAY_LINE_1);
+        if (is_button_pressed(&sensors)) {
+          state_back = OFF;
+          display_write("", DISPLAY_LINE_1);
+        } else if (abs(deviation) >= abs(deviation_1)) {
+          state_back = GOING_BACK;
+          mpu9250_stop_gyro_integration();
+          prev_encoder = sensors.rightWheelEncoder;
+        } else {
+          display_write("ALIGNING", DISPLAY_LINE_0);
+          kobukiDriveDirect(-s*50,s*50);
+          state_back = ALIGNING;
+        }
+        break; // each case needs to end with break!
+      }
+      case GOING_BACK: {
+        uint16_t next_encoder = sensors.rightWheelEncoder;
+        distance = measure_distance(next_encoder, prev_encoder);
+        char buf[16];
+        snprintf(buf,16,"%f", start_distance-distance);
+        display_write(buf, DISPLAY_LINE_1);
+        if (is_button_pressed(&sensors)) {
+          state_back = OFF;
+          display_write("", DISPLAY_LINE_1);
+        } else if (distance >= start_distance) {
+          state_back = ORIENTING;
+          mpu9250_start_gyro_integration();
+          deviation = 0;
+          s = sgn(deviation_2);
+        } else {
+          display_write("GOING_BACK", DISPLAY_LINE_0);
+          kobukiDriveDirect(100,100);
+          state_back = GOING_BACK;
+        }
+        break;
+      }
+
+      case ORIENTING: {
+       deviation = mpu9250_read_gyro_integration().z_axis;
+       char buf[16];
+       snprintf(buf,16,"%f", deviation_2-deviation);
+       display_write(buf, DISPLAY_LINE_1);
+        if (is_button_pressed(&sensors)) {
+          state_back = OFF;
+          display_write("", DISPLAY_LINE_1);
+        } else if (abs(deviation) >= abs(deviation_2)) {
+          state_back = OFF;
+          mpu9250_stop_gyro_integration();
+        } else {
+          // perform state-specific actions here
+          display_write("ORIENTING", DISPLAY_LINE_0);
+          kobukiDriveDirect(-s*50,s*50);
+          state_back = ORIENTING;
+        }
+
+        break;
+      }
+    }
+  }
+}
+
+
