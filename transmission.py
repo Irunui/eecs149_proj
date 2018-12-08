@@ -6,11 +6,10 @@ import paho.mqtt.client as mqtt
 import paho.mqtt.subscribe as subscribe
 
 mqtt_client = mqtt.Client("ble_tx")
-kinnect_mqtt = mqtt.Client("ble_tx")
 prev_xPos = [0, 0]
 prev_yPos = [0, 0]
 currPos = [(0, 0), (0, 0)]
-targetPos = [(0, 0), (0, 0.5), (-0.5, -0.5), (0.5, -0.5)]
+targetPos = [(0, 0), (0, 0.5)]
 kobuki_id = [0]
 prevDeg = [0, 0]
 currDeg = [0, 0]
@@ -27,10 +26,6 @@ def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
 
     message_queued = False
     if(abs(currPos[0]-targetPos[0])>0.1 or abs(currPos[1]-targetPos[1])>0.1 or abs(currDeg-targetDeg)>5):
-
-        #prev_xPos[kobuki_id] = currPos[0]
-        #prev_yPos[kobuki_id] = currPos[1]
-        #prevDeg[kobuki_id] = currDeg
 
         if(targetPos != (0,0)):
             initialPos = (float_to_hex(targetPos[0]), float_to_hex(targetPos[1]))
@@ -50,21 +45,13 @@ def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
             yPos_initial = "0 0 0 0"
 
         startCommand = "sudo hcitool -i hci0 cmd 0x08 0x0008 1e "
-        startCommand += "FF FF "+hex(kobuki_id)+" "+hex(tx_id)+" "+hex(master)+" "+xPos_current+" "+yPos_current+" "+hex(currDeg)+" "
-        startCommand += xPos_initial+" "+yPos_initial+" "+hex(targetDeg)+" FF 48 d2 b0 60 d0 f5 a7 10 96 e0 00 00 00 00 c5 00 00 00 00 00 00"
+        startCommand += "FF FF "+hex(kobuki_id)+" "+hex(tx_id)+" "+hex(master)+" "+xPos_current+" "+yPos_current+" "+hex(currDeg/2)+" "
+        startCommand += xPos_initial+" "+yPos_initial+" "+hex(targetDeg/2)+" FF 48 d2 b0 60 d0 f5 a7 10 96 e0 00 00 00 00 c5 00 00 00 00 00 00"
         os.system(startCommand)
         os.system("sudo hciconfig hci0 leadv 0")
         time.sleep(1)
         print "Transmission complete"
-        run = 0
     return tx_id + 1
-
-def getKobukiPos(kobuki_id):
-    if kobuki_id < len(targetPos)-1:
-        pos = targetPos[kobuki_id]
-        return pos
-    else:
-        return (0,0)
 
 def on_message(client, userdata, message):
     global currPos, currDeg, kobuki_id, message_queued, prev_xPos, prev_yPos, kobuki_moving, prevDeg
@@ -79,8 +66,7 @@ def on_message(client, userdata, message):
         yPos = float(data[2])
         deg = int(float(data[3]))
         count = 0
-        #print(prev_xPos[temp_id])
-        if (abs(xPos-prev_xPos[temp_id])>0.05 or abs(yPos-prev_yPos[temp_id])>0.05 or abs(deg-prevDeg[temp_id])>7 and abs(deg-prevDeg[temp_id])<80):
+        if (abs(xPos-prev_xPos[temp_id])>0.05 or abs(yPos-prev_yPos[temp_id])>0.05 or abs(deg-prevDeg[temp_id])>7):     #and abs(deg-prevDeg[temp_id])<80
             prev_xPos[temp_id] = xPos
             prev_yPos[temp_id] = yPos
             prevDeg[temp_id] = deg
@@ -115,17 +101,20 @@ def main():
         if(message_queued):
             master = input("Command: ")
             print("")
-            run = 1
             for i in kobuki_id:
+                if master == 2:
+                    tx_id = ble_tx(i, tx_id, 0, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
+                    time.sleep(0.5)
                 mqtt_client.unsubscribe("kobuki")
                 print("")
                 print("Transmission ID ", tx_id)
                 print("Target Position: ", targetPos[i])
                 print("Current Position: ", currPos[i])
+                print("Current Angle: ", currDeg[i])
                 print("")
                 tx_id = ble_tx(i, tx_id, master, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
                 mqtt_client.subscribe("kobuki")
-            time.sleep(5)
+            time.sleep(3)
         else:
             run = 0
         os.system("sudo hciconfig hci0 noleadv")
