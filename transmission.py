@@ -51,9 +51,18 @@ def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
         startCommand = "sudo hcitool -i hci0 cmd 0x08 0x0008 1e "
         startCommand += "FF FF "+hex(kobuki_id)+" "+hex(tx_id)+" "+hex(master)+" "+xPos_current+" "+yPos_current+" "+hex(currDeg/2)+" "
         startCommand += xPos_initial+" "+yPos_initial+" "+hex(targetDeg/2)+" FF 48 d2 b0 60 d0 f5 a7 10 96 e0 00 00 00 00 c5 00 00 00 00 00 00"
+<<<<<<< HEAD
         os.system(startCommand)
         os.system("sudo hciconfig hci0 leadv 0")
         time.sleep(0.2)
+=======
+        os.system(startCommand)                                                                         #Sets advertising data
+        os.system("sudo hcitool -i hci0 cmd 0x08 0x0006 A0 00 A0 00 03 00 00 00 00 00 00 00 00 07 00")  #Sets advertising interval to 100ms
+        os.system("sudo hcitool -i hci0 cmd 0x08 0x000a 01")                                            #Turns on bluetooth advertising
+        #os.system("sudo hciconfig hci0 leadv 0")
+        time.sleep(1)
+        os.system("sudo hciconfig hci0 noleadv")    #Turns off bluetooth advertising
+>>>>>>> refs/remotes/origin/master
     return tx_id + 1
 
 def on_message(client, userdata, message):
@@ -140,11 +149,8 @@ def main():
                     print("")
                     #Sets the target location and turns on bluetooth advertising
                     tx_id = ble_tx(i, tx_id, master, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
-                    time.sleep(1.5)
                     mqtt_client.subscribe("kobuki")
             last_gesture_id = gesture_id
-        time.sleep(2)
-        os.system("sudo hciconfig hci0 noleadv")    #Turns off bluetooth advertising
 
 if __name__ == '__main__':
 	main()
