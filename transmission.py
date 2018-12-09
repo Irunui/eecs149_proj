@@ -28,7 +28,7 @@ def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
     global prev_xPos, prev_yPos, prevDeg, message_queued
 
     message_queued = False
-    if(abs(currPos[0]-targetPos[0])>0.1 or abs(currPos[1]-targetPos[1])>0.1 or abs(currDeg-targetDeg)>5 and master!=2):
+    if(abs(currPos[0]-targetPos[0])>0.1 or abs(currPos[1]-targetPos[1])>0.1 or abs(currDeg-targetDeg)>5 or master!=2):
 
         if(targetPos != (0,0)):
             initialPos = (float_to_hex(targetPos[0]), float_to_hex(targetPos[1]))
@@ -101,7 +101,6 @@ def on_message(client, userdata, message):
             master = 0
         gesture_id += 1
 
-
 def main():
     global prev_xPos, prev_yPos, run, currPos, kobuki_id, currDeg, targetDeg, gesture_id, current_gesture, master
     #message_queued = False
@@ -120,6 +119,7 @@ def main():
             print(current_gesture)
             if(message_queued):
                 for i in kobuki_id:
+                    print("Kobuki: ", i)
                     if master == 2:
                         tx_id = ble_tx(i, tx_id, 0, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
                         time.sleep(0.5)
@@ -132,8 +132,8 @@ def main():
                     print("Current Angle: ", currDeg[i])
                     print("")
                     tx_id = ble_tx(i, tx_id, master, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
-                    mqtt_client.subscribe("kobuki")
                     time.sleep(1.5)
+                    mqtt_client.subscribe("kobuki")
             last_gesture_id = gesture_id
         #if(message_queued):
             #master = input("Command: ")
@@ -142,7 +142,7 @@ def main():
             run = 0
         time.sleep(2)
         os.system("sudo hciconfig hci0 noleadv")
-        
+
 
 if __name__ == '__main__':
 	main()

@@ -1,0 +1,55 @@
+
+       } else if (sensors.bumps_wheelDrops.bumpLeft || sensors.bumps_wheelDrops.bumpRight || sensors.bumps_wheelDrops.bumpCenter) {
+          state_rand = OBSTACLES_BACK_UP;
+          display_write("OBSTACLE", DISPLAY_LINE_0);
+          if (!sensors.bumps_wheelDrops.bumpCenter){
+            left = sensors.bumps_wheelDrops.bumpLeft && !sensors.bumps_wheelDrops.bumpRight;
+          }
+          prev_encoder = sensors.rightWheelEncoder;
+     
+     case OBSTACLES_BACK_UP: {
+        next_encoder = sensors.rightWheelEncoder;
+        distance = measure_negative_distance(next_encoder, prev_encoder);
+        char buf[16];
+        snprintf(buf,16,"%f", distance);
+        display_write(buf, DISPLAY_LINE_1);
+        if (is_button_pressed(&sensors)) {
+          state_rand = OFF;
+          display_write("", DISPLAY_LINE_1);
+        } else if (distance >= 0.1) {
+          state_rand = AVOIDING_OBSTACLES;
+          angle = 0;
+          mpu9250_start_gyro_integration();
+        } else {
+          // perform state-specific actions here
+          display_write("OBSTACLE", DISPLAY_LINE_0);
+          kobukiDriveDirect(-100,-100);
+          state_rand = OBSTACLES_BACK_UP;
+        }
+        break;
+      }
+
+       case AVOIDING_OBSTACLES: {
+        angle = mpu9250_read_gyro_integration().z_axis;
+        char buf[16];
+        snprintf(buf,16,"%f", angle);
+        display_write(buf, DISPLAY_LINE_1);
+        if (is_button_pressed(&sensors)) {
+          state_rand = OFF;
+          display_write("", DISPLAY_LINE_1);
+        } else if (abs(angle) >= 45) {
+          state_rand = DRIVING;
+          mpu9250_stop_gyro_integration();
+          distance_rand = 0.1*printRandoms(1,15,1);
+          prev_encoder = sensors.rightWheelEncoder;
+        } else {
+          display_write("AVOIDING_OBSTACLES", DISPLAY_LINE_0);
+          if (left==true) {
+            kobukiDriveDirect(50,-50);
+          } else {
+            kobukiDriveDirect(-50,50);   
+            state_rand = AVOIDING_OBSTACLES;
+          }
+        }  
+        break;
+      } 
