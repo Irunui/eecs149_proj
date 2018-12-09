@@ -181,7 +181,6 @@ void ble_evt_adv_report(ble_evt_t const* p_ble_evt) {
 
   if ((ble_addr[5] == 0xF8 && ble_addr[4] == 0x59 && ble_addr[3] == 0x71 && ble_addr[2] == 0x99)
       || (ble_addr[5] == 0xCC && ble_addr[4] == 0x2F && ble_addr[3] == 0x71 && ble_addr[2] == 0x58)) {
-  if (ble_addr[5] == 0xCC && ble_addr[4] == 0x2F && ble_addr[3] == 0x71 && ble_addr[2] == 0x58) {
     printf("Kobuki ID Received: %d\n", adv_buf[2]);
     if (adv_buf[2] == 1){     //ID of the Kobuki
       if(current_rx_id != adv_buf[3]) {
