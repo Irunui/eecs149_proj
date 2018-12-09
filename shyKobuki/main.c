@@ -61,7 +61,7 @@ static simple_ble_config_t ble_config = {
         .platform_id       = 0x49,    // used as 4th octet in device BLE address
         .device_id         = 0x0002,  // used as the 5th and 6th octet in the device BLE address, you will need to change this for each device you have
         .adv_name          = "EE149", // irrelevant in this example
-        .adv_interval      = MSEC_TO_UNITS(1000, UNIT_0_625_MS), // send a packet once per second (minimum is 20 ms)
+        .adv_interval      = MSEC_TO_UNITS(50, UNIT_0_625_MS), // send a packet once per second (minimum is 20 ms)
         .min_conn_interval = MSEC_TO_UNITS(500, UNIT_1_25_MS), // irrelevant if advertising only
         .max_conn_interval = MSEC_TO_UNITS(1000, UNIT_1_25_MS), // irrelevant if advertising only
 };
@@ -191,7 +191,7 @@ void ble_evt_adv_report(ble_evt_t const* p_ble_evt) {
 
   //print the BLE address of the device
   //printf("BLE Address: %X%X%X%X%X%X\n", ble_addr[5], ble_addr[4], ble_addr[3], ble_addr[2], ble_addr[1], ble_addr[0]);
-  if (ble_addr[5] == 0xF8 && ble_addr[4] == 0x59 && ble_addr[3] == 0x71 && ble_addr[2] == 0x99) {
+  if (ble_addr[5] == 0xCC && ble_addr[4] == 0x2F && ble_addr[3] == 0x71 && ble_addr[2] == 0x58) {
     printf("Kobuki ID Received: %d\n", adv_buf[2]);
     if (adv_buf[2] == 1){     //ID of the Kobuki
       if(current_rx_id != adv_buf[3]) {
