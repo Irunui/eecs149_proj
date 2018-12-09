@@ -192,7 +192,7 @@ void ble_evt_adv_report(ble_evt_t const* p_ble_evt) {
   //print the BLE address of the device
   //printf("BLE Address: %X%X%X%X%X%X\n", ble_addr[5], ble_addr[4], ble_addr[3], ble_addr[2], ble_addr[1], ble_addr[0]);
   if (ble_addr[5] == 0xF8 && ble_addr[4] == 0x59 && ble_addr[3] == 0x71 && ble_addr[2] == 0x99) {
-    printf("Kobuki ID Received: %d\n");
+    printf("Kobuki ID Received: %d\n", adv_buf[2]);
     if (adv_buf[2] == 1){     //ID of the Kobuki
       if(current_rx_id != adv_buf[3]) {
         display_write("BLE Received", DISPLAY_LINE_0);
