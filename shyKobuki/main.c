@@ -61,7 +61,7 @@ static simple_ble_config_t ble_config = {
         .platform_id       = 0x49,    // used as 4th octet in device BLE address
         .device_id         = 0x0002,  // used as the 5th and 6th octet in the device BLE address, you will need to change this for each device you have
         .adv_name          = "EE149", // irrelevant in this example
-        .adv_interval      = MSEC_TO_UNITS(1000, UNIT_0_625_MS), // send a packet once per second (minimum is 20 ms)
+        .adv_interval      = MSEC_TO_UNITS(50, UNIT_0_625_MS), // send a packet once per second (minimum is 20 ms)
         .min_conn_interval = MSEC_TO_UNITS(500, UNIT_1_25_MS), // irrelevant if advertising only
         .max_conn_interval = MSEC_TO_UNITS(1000, UNIT_1_25_MS), // irrelevant if advertising only
 };
@@ -86,15 +86,6 @@ robot_state_t previous_state = OFF;
 //  BASIC CALCUL FUNCTIONS and constants
 
 float Pi = M_PI;
-
-static int sgn(float number) {
-  if (number > 0) {
-    return 1;
-  }
-  else {
-    return -1;
-  }
-}
 
 static float measure_distance (uint16_t current_encoder, uint16_t previous_encoder) {
   const float CONVERSION = 0.00008529;
@@ -181,7 +172,6 @@ static void go_to_target(float x, float y, float alpha, float x_target, float y_
 
 void ble_evt_adv_report(ble_evt_t const* p_ble_evt) {
 
-  //printf("Advertise\n");
   //extract the fields we care about
   ble_gap_evt_adv_report_t const* adv_report = &(p_ble_evt->evt.gap_evt.params.adv_report);
   uint8_t const* ble_addr = adv_report->peer_addr.addr;
@@ -189,14 +179,12 @@ void ble_evt_adv_report(ble_evt_t const* p_ble_evt) {
   uint16_t adv_len = adv_report->data.len;
   uint32_t temp;
 
-  //print the BLE address of the device
-  //printf("BLE Address: %X%X%X%X%X%X\n", ble_addr[5], ble_addr[4], ble_addr[3], ble_addr[2], ble_addr[1], ble_addr[0]);
-  if (ble_addr[5] == 0xF8 && ble_addr[4] == 0x59 && ble_addr[3] == 0x71 && ble_addr[2] == 0x99) {
+  if ((ble_addr[5] == 0xF8 && ble_addr[4] == 0x59 && ble_addr[3] == 0x71 && ble_addr[2] == 0x99)
+      || (ble_addr[5] == 0xCC && ble_addr[4] == 0x2F && ble_addr[3] == 0x71 && ble_addr[2] == 0x58)) {
     printf("Kobuki ID Received: %d\n", adv_buf[2]);
     if (adv_buf[2] == 1){     //ID of the Kobuki
       if(current_rx_id != adv_buf[3]) {
-        display_write("BLE Received", DISPLAY_LINE_0);
-        printf("Master Received: %d\n", adv_buf[4]);
+        //display_write("BLE Received", DISPLAY_LINE_0);
         current_rx_id = adv_buf[3];
         master = adv_buf[4];
 
@@ -376,6 +364,7 @@ int main(void) {
             previous_state = ALIGNING;
             state = OBSTACLE_BACK_UP;
             distanceObstacle = 0;
+            prev_encoder = sensors.rightWheelEncoder;
           } else if (abs(deviation) >= abs(angle_to_turn)) { // if we turned enough
             state = GOING_BACK;
             prev_encoder = sensors.rightWheelEncoder;
@@ -416,6 +405,7 @@ int main(void) {
           previous_state = GOING_BACK;
           state = OBSTACLE_BACK_UP;
           distanceObstacle = 0;
+          prev_encoder = sensors.rightWheelEncoder;
         } else if (distance >= distance_to_target) {
           state = ORIENTING;
           deviation = 0;
@@ -450,6 +440,7 @@ int main(void) {
           previous_state = ORIENTING;
           state = OBSTACLE_BACK_UP;
           distanceObstacle = 0;
+          prev_encoder = sensors.rightWheelEncoder;
         } else if (abs(deviation-angle_to_turn) >= abs(final_alpha-angle_to_turn)) {
             state = OFF;
             display_write("", DISPLAY_LINE_1);
@@ -478,15 +469,16 @@ int main(void) {
         uint16_t next_encoder = sensors.rightWheelEncoder;
         distanceObstacle = measure_negative_distance(next_encoder, prev_encoder);
         char buf[16];
-        snprintf(buf,16,"%f", distance);
+        snprintf(buf,16,"%f", distanceObstacle);
         display_write(buf, DISPLAY_LINE_1);
         if (is_button_pressed(&sensors)) {
           state = OFF;
           display_write("", DISPLAY_LINE_1);
         } else if (distanceObstacle >= 0.05) {
           kobukiDriveDirect(0,0);
-          if(time > 10){
+          if(time > 5){
             state = previous_state;
+            prev_encoder = sensors.rightWheelEncoder;
           }
         } else {
           // perform state-specific actions here

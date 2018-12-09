@@ -6,14 +6,14 @@ import paho.mqtt.client as mqtt
 import paho.mqtt.subscribe as subscribe
 
 mqtt_client = mqtt.Client("ble_tx")
-prev_xPos = [0, 0]
-prev_yPos = [0, 0]
-currPos = [(0, 0), (0, 0)]
-targetPos = [(0, 0), (0.5, 0)]
+prev_xPos = [0, 0, 0]
+prev_yPos = [0, 0, 0]
+currPos = [(0, 0), (0, 0), (0, 0)]
+targetPos = [(0, 0), (0, 0), (0, 0)]
 kobuki_id = [0]
-prevDeg = [0, 0]
-currDeg = [0, 0]
-targetDeg = [0, 0]
+prevDeg = [0, 0, 0]
+currDeg = [0, 0, 0]
+targetDeg = [0, 0, 0]
 message_queued = False
 kobuki_moving = False
 run = 1
@@ -29,6 +29,7 @@ def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
 
     message_queued = False
     if(abs(currPos[0]-targetPos[0])>0.1 or abs(currPos[1]-targetPos[1])>0.1 or abs(currDeg-targetDeg)>5 or master!=2):
+        #   If current position is different enough from target position, else ignore the advertisement
 
         if(targetPos != (0,0)):
             initialPos = (float_to_hex(targetPos[0]), float_to_hex(targetPos[1]))
@@ -52,7 +53,7 @@ def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
         startCommand += xPos_initial+" "+yPos_initial+" "+hex(targetDeg/2)+" FF 48 d2 b0 60 d0 f5 a7 10 96 e0 00 00 00 00 c5 00 00 00 00 00 00"
         os.system(startCommand)
         os.system("sudo hciconfig hci0 leadv 0")
-        time.sleep(1.5)
+        time.sleep(0.2)
     return tx_id + 1
 
 def on_message(client, userdata, message):
@@ -96,10 +97,12 @@ def on_message(client, userdata, message):
         current_gesture = str(message.payload.decode("utf-8"))
         if current_gesture == "ZoomIn":
             master = 2
-            targetPos[0] = (0, 0)
-            targetPos[1] = (0, 0.5)
-            targetDeg[0] = 180
-            targetDeg[1] = 0
+            targetPos[0] = (0.5, 0)
+            targetPos[1] = (0, 0)
+            targetPos[2] = (-0.5, 0)
+            targetDeg[0] = 90
+            targetDeg[1] = 90
+            targetDeg[2] = 90
         elif current_gesture == "ZoomOut":
             master = 1
         elif current_gesture == "Off":
@@ -111,7 +114,7 @@ def main():
     os.system("sudo hcitool dev")
     print("Creating MQTT mqtt_client")
     mqtt_client.on_message = on_message
-    mqtt_client.connect("localhost")    #128.32.44.126
+    mqtt_client.connect("128.32.44.126")    #128.32.44.126
     mqtt_client.loop_start()
     mqtt_client.subscribe("kobuki")
     mqtt_client.subscribe("gesture")
