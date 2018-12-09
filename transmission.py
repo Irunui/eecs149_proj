@@ -51,7 +51,9 @@ def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
         startCommand += "FF FF "+hex(kobuki_id)+" "+hex(tx_id)+" "+hex(master)+" "+xPos_current+" "+yPos_current+" "+hex(currDeg/2)+" "
         startCommand += xPos_initial+" "+yPos_initial+" "+hex(targetDeg/2)+" FF 48 d2 b0 60 d0 f5 a7 10 96 e0 00 00 00 00 c5 00 00 00 00 00 00"
         os.system(startCommand)
-        os.system("sudo hciconfig hci0 leadv 0")
+	os.system("sudo hcitool -i hci0 cmd 0x08 0x0006 A0 00 A0 00 03 00 00 00 00 00 00 00 00 07 00")
+        os.system("sudo hcitool -i hci0 cmd 0x08 0x000a 01")
+        #os.system("sudo hciconfig hci0 leadv 0")
         time.sleep(1.5)
     return tx_id + 1
 
