@@ -52,7 +52,7 @@ def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
         startCommand += xPos_initial+" "+yPos_initial+" "+hex(targetDeg/2)+" FF 48 d2 b0 60 d0 f5 a7 10 96 e0 00 00 00 00 c5 00 00 00 00 00 00"
         os.system(startCommand)
         os.system("sudo hciconfig hci0 leadv 0")
-        time.sleep(1)
+        time.sleep(1.5)
     return tx_id + 1
 
 def on_message(client, userdata, message):
@@ -76,9 +76,9 @@ def on_message(client, userdata, message):
             currDeg[temp_id] = deg
             message_queued = True
             kobuki_moving = True
-            #mqtt_client.unsubscribe("kobuki")
             print "Kobuki ID: ", kobuki_id[temp_id], "Current Position: ", currPos[temp_id], "Current Angle: ", currDeg[temp_id]
         else:
+            #   If the same message is repeated 5 times, the kobuki is not moving
             #print "Message repeated"
             if count >= 5:
                 kobuki_moving = False
@@ -87,7 +87,12 @@ def on_message(client, userdata, message):
                 kobuki_moving = True
                 count += 1
     if (message.topic == "gesture"):
-        print "Gesture Received"
+        """
+            master = 0  ----->  Kobuki OFF
+            master = 1  ----->  Kobuki RANDOM
+            master = 2  ----->  Kobuki GO TO TARGET LOCATION
+        """
+        #print "Gesture Received"
         current_gesture = str(message.payload.decode("utf-8"))
         if current_gesture == "ZoomIn":
             master = 2
@@ -103,7 +108,6 @@ def on_message(client, userdata, message):
 
 def main():
     global prev_xPos, prev_yPos, run, currPos, kobuki_id, currDeg, targetDeg, gesture_id, current_gesture, master
-    #message_queued = False
     os.system("sudo hcitool dev")
     print("Creating MQTT mqtt_client")
     mqtt_client.on_message = on_message
@@ -121,8 +125,8 @@ def main():
                 for i in kobuki_id:
                     print("Kobuki: ", i)
                     if master == 2:
+                        #STOPS THE KOBUKI FOR A LITTLE WHILE BEFORE TELLING IT TO GO TO TARGET LOCATION
                         tx_id = ble_tx(i, tx_id, 0, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
-                        time.sleep(0.5)
                     mqtt_client.unsubscribe("kobuki")
                     print("")
                     print("Transmission ID ", tx_id)
@@ -131,18 +135,13 @@ def main():
                     print("Current Position: ", currPos[i])
                     print("Current Angle: ", currDeg[i])
                     print("")
+                    #Sets the target location and turns on bluetooth advertising
                     tx_id = ble_tx(i, tx_id, master, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
                     time.sleep(1.5)
                     mqtt_client.subscribe("kobuki")
             last_gesture_id = gesture_id
-        #if(message_queued):
-            #master = input("Command: ")
-            #print("")
-        else:
-            run = 0
         time.sleep(2)
-        os.system("sudo hciconfig hci0 noleadv")
-
+        os.system("sudo hciconfig hci0 noleadv")    #Turns off bluetooth advertising
 
 if __name__ == '__main__':
 	main()
