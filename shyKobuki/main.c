@@ -307,7 +307,7 @@ int main(void) {
 
         if (is_button_pressed(&sensors) || master != 0) {
           state = RANDOM;
-          srand((unsigned int) (current_x +2)*100);
+          srand((unsigned int) ((current_x*current_y +2)*100));
           //printf("ALIGNING\n");
         } else {
           display_write("OFF", DISPLAY_LINE_0);
@@ -466,6 +466,12 @@ int main(void) {
             speed_correction = final_alpha-deviation;
             s = min_rotation_speed + abs(speed_correction);
             // determining direction to turn
+            if (final_alpha-angle_to_turn>180) {
+                final_alpha = final_alpha-360;
+            } else if (final_alpha-angle_to_turn<-180) {
+                
+                final_alpha = final_alpha+360;
+                }
             if (final_alpha > angle_to_turn) {
                 s = s; // good direction
             } else {
