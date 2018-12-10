@@ -52,6 +52,9 @@ int master = 0;
 int current_rx_id = 0;
 bool inside = true;
 
+// RANDOM MOTION INITIALISATION
+srand((unsigned int) ((current_x*current_y +2)*100));
+
 // VARIABLES DEFINITION
 float deviation = 0;
 float distance = 0;
@@ -307,7 +310,6 @@ int main(void) {
 
         if (is_button_pressed(&sensors) || master != 0) {
           state = RANDOM;
-          srand((unsigned int) ((current_x*current_y +2)*100));
           //printf("ALIGNING\n");
         } else {
           display_write("OFF", DISPLAY_LINE_0);
