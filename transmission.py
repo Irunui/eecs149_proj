@@ -19,17 +19,17 @@ kobuki_moving = False
 run = 1
 gesture_id = 0
 current_gesture = "None"
-master = 0
+master = [0]
 
 def float_to_hex(f):
     return hex(struct.unpack('<I', struct.pack('<f', f))[0]).lstrip("0x")
 
-def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
+def ble_tx(kobuki_id, tx_id, command, currPos, targetPos, currDeg, targetDeg):
     global prev_xPos, prev_yPos, prevDeg, message_queued
 
-    message_queued = False
-    if(abs(currPos[0]-targetPos[0])>0.1 or abs(currPos[1]-targetPos[1])>0.1 or abs(currDeg-targetDeg)>5 or master!=2):
+    if(abs(currPos[0]-targetPos[0])>0.1 or abs(currPos[1]-targetPos[1])>0.1 or abs(currDeg-targetDeg)>5 or command!=2):
         #   If current position is different enough from target position, else ignore the advertisement
+        message_queued = False
 
         if(targetPos != (0,0)):
             initialPos = (float_to_hex(targetPos[0]), float_to_hex(targetPos[1]))
@@ -49,13 +49,13 @@ def ble_tx(kobuki_id, tx_id, master, currPos, targetPos, currDeg, targetDeg):
             yPos_initial = "0 0 0 0"
 
         startCommand = "sudo hcitool -i hci0 cmd 0x08 0x0008 1e "
-        startCommand += "FF FF "+hex(kobuki_id)+" "+hex(tx_id)+" "+hex(master)+" "+xPos_current+" "+yPos_current+" "+hex(currDeg/2)+" "
+        startCommand += "FF FF "+hex(kobuki_id)+" "+hex(tx_id)+" "+hex(command)+" "+xPos_current+" "+yPos_current+" "+hex(currDeg/2)+" "
         startCommand += xPos_initial+" "+yPos_initial+" "+hex(targetDeg/2)+" FF 48 d2 b0 60 d0 f5 a7 10 96 e0 00 00 00 00 c5 00 00 00 00 00 00"
         os.system(startCommand)                                                                         #Sets advertising data
         os.system("sudo hcitool -i hci0 cmd 0x08 0x0006 A0 00 A0 00 03 00 00 00 00 00 00 00 00 07 00")  #Sets advertising interval to 100ms
         os.system("sudo hcitool -i hci0 cmd 0x08 0x000a 01")                                            #Turns on bluetooth advertising
         #os.system("sudo hciconfig hci0 leadv 0")
-        time.sleep(0.4)
+        time.sleep(0.5)
         os.system("sudo hciconfig hci0 noleadv")    #Turns off bluetooth advertising
     return tx_id + 1
 
@@ -78,6 +78,8 @@ def on_message(client, userdata, message):
             prevDeg[temp_id] = deg
             currPos[temp_id] = (xPos, yPos)
             currDeg[temp_id] = deg
+            if(abs(xPos)>0.5 or abs(yPos)>0.5):         #If the kobuki is leaving the camera's field of vision
+                master[temp_id] = 3
             message_queued = True
             kobuki_moving = True
             print "Kobuki ID: ", kobuki_id[temp_id], "Current Position: ", currPos[temp_id], "Current Angle: ", currDeg[temp_id]
@@ -99,7 +101,7 @@ def on_message(client, userdata, message):
         #print "Gesture Received"
         current_gesture = str(message.payload.decode("utf-8"))
         if current_gesture == "ZoomIn":
-            master = 2
+            master = [2, 2, 2]
             targetPos[0] = (0.5, 0)
             targetPos[1] = (0, 0)
             targetPos[2] = (-0.5, 0)
@@ -107,30 +109,29 @@ def on_message(client, userdata, message):
             targetDeg[1] = 90
             targetDeg[2] = 90
         elif current_gesture == "ZoomOut":
-            master = 1
+            master = [1, 1, 1]
         elif current_gesture == "Off":
-            master = 0
+            master = [0, 0, 0]
         gesture_id += 1
 
 def main():
-    global prev_xPos, prev_yPos, run, currPos, kobuki_id, currDeg, targetDeg, gesture_id, current_gesture, master
+    global prev_xPos, prev_yPos, run, currPos, kobuki_id, currDeg, targetDeg, gesture_id, current_gesture, master, start_time, stop_time
     os.system("sudo hcitool dev")
     print("Creating MQTT mqtt_client")
     mqtt_client.on_message = on_message
-    mqtt_client.connect("128.32.44.126")    #128.32.44.126
+    mqtt_client.connect("localhost")    #128.32.44.126
     mqtt_client.loop_start()
     mqtt_client.subscribe("kobuki")
     mqtt_client.subscribe("gesture")
     last_gesture_id = 0
     tx_id = 1
     while(1):
-        if (gesture_id > last_gesture_id):
+        if (gesture_id > last_gesture_id or 3 in master):       #If there is a new gesture, or the kobuki is leaving the camera's field of vision
             #HERE WE TAKE ACTION DEPENDING ON THE GESTURE
-            print(current_gesture)
+            #print(current_gesture)
             if(message_queued):
                 for i in kobuki_id:
-                    print("Kobuki: ", i)
-                    if master == 2:
+                    if master[i] == 2:
                         #STOPS THE KOBUKI FOR A LITTLE WHILE BEFORE TELLING IT TO GO TO TARGET LOCATION
                         tx_id = ble_tx(i, tx_id, 0, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
                     mqtt_client.unsubscribe("kobuki")
@@ -142,7 +143,9 @@ def main():
                     print("Current Angle: ", currDeg[i])
                     print("")
                     #Sets the target location and turns on bluetooth advertising
-                    tx_id = ble_tx(i, tx_id, master, currPos[i], targetPos[i], currDeg[i], targetDeg[i])
+                    tx_id = ble_tx(i, tx_id, master[i], currPos[i], targetPos[i], currDeg[i], targetDeg[i])
+                    if master[i] == 3:
+                        master[i] = 1
                     mqtt_client.subscribe("kobuki")
             last_gesture_id = gesture_id
 
