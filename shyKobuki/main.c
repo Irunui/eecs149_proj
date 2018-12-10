@@ -1,3 +1,4 @@
+
 // Robot Template app
 //
 // Framework for creating applications that control the Kobuki robot
@@ -35,6 +36,8 @@
 #include "mpu9250.h"
 
 static uint8_t LEDS[3] = {BUCKLER_LED0, BUCKLER_LED1, BUCKLER_LED2};
+
+int KOBUKI_ID = 1;
 
 // INITIAL POSITION
 float initial_x = 0;
@@ -82,6 +85,7 @@ typedef enum {
 
 robot_state_t state = OFF;
 robot_state_t previous_state = OFF;
+
 
 //  BASIC CALCUL FUNCTIONS and constants
 
@@ -182,7 +186,7 @@ void ble_evt_adv_report(ble_evt_t const* p_ble_evt) {
   if ((ble_addr[5] == 0xF8 && ble_addr[4] == 0x59 && ble_addr[3] == 0x71 && ble_addr[2] == 0x99)
       || (ble_addr[5] == 0xCC && ble_addr[4] == 0x2F && ble_addr[3] == 0x71 && ble_addr[2] == 0x58)) {
     printf("Kobuki ID Received: %d\n", adv_buf[2]);
-    if (adv_buf[2] == 1){     //ID of the Kobuki
+    if (adv_buf[2] == KOBUKI_ID){     //ID of the Kobuki
       if(current_rx_id != adv_buf[3]) {
         //display_write("BLE Received", DISPLAY_LINE_0);
         current_rx_id = adv_buf[3];
@@ -303,6 +307,7 @@ int main(void) {
 
         if (is_button_pressed(&sensors) || master != 0) {
           state = RANDOM;
+          srand((unsigned int) (current_x +2)*100);
           //printf("ALIGNING\n");
         } else {
           display_write("OFF", DISPLAY_LINE_0);
@@ -315,7 +320,15 @@ int main(void) {
         if (master==2) {
           go_to_target(current_x, current_y, current_angle, initial_x, initial_y, initial_angle);
           //printf("ALIGNING\n");
-        } else if (master==0) {
+        } else if (master==3) { // out of the borders
+            previous_state = RANDOM;
+          state = OBSTACLE_BACK_UP;
+          distanceObstacle = 0;
+          kobukiDriveDirect(0,0);
+          nrf_delay_ms(50);
+          prev_encoder = sensors.rightWheelEncoder;
+          master = -1;
+        }else if (master==0) {
             state = OFF;
         } else if (sensors.bumps_wheelDrops.bumpLeft || sensors.bumps_wheelDrops.bumpRight || sensors.bumps_wheelDrops.bumpCenter) {
           previous_state = RANDOM;
@@ -474,8 +487,9 @@ int main(void) {
         if (is_button_pressed(&sensors)) {
           state = OFF;
           display_write("", DISPLAY_LINE_1);
-        } else if (distanceObstacle >= 0.05) {
+        } else if (distanceObstacle >= 0.15) {
           kobukiDriveDirect(0,0);
+          time = time+1;
           if(time > 5){
             state = previous_state;
             prev_encoder = sensors.rightWheelEncoder;
