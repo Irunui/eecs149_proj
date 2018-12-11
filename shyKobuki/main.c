@@ -1,4 +1,3 @@
-
 // Robot Template app
 //
 // Framework for creating applications that control the Kobuki robot
@@ -52,9 +51,6 @@ int master = 0;
 int current_rx_id = 0;
 bool inside = true;
 
-// RANDOM MOTION INITIALISATION
-srand((unsigned int) ((current_x*current_y +2)*100));
-
 // VARIABLES DEFINITION
 float deviation = 0;
 float distance = 0;
@@ -67,7 +63,7 @@ static simple_ble_config_t ble_config = {
         .platform_id       = 0x49,    // used as 4th octet in device BLE address
         .device_id         = 0x0002,  // used as the 5th and 6th octet in the device BLE address, you will need to change this for each device you have
         .adv_name          = "EE149", // irrelevant in this example
-        .adv_interval      = MSEC_TO_UNITS(50, UNIT_0_625_MS), // send a packet once per second (minimum is 20 ms)
+        .adv_interval      = MSEC_TO_UNITS(20, UNIT_0_625_MS), // send a packet once per second (minimum is 20 ms)
         .min_conn_interval = MSEC_TO_UNITS(500, UNIT_1_25_MS), // irrelevant if advertising only
         .max_conn_interval = MSEC_TO_UNITS(1000, UNIT_1_25_MS), // irrelevant if advertising only
 };
@@ -199,6 +195,8 @@ void ble_evt_adv_report(ble_evt_t const* p_ble_evt) {
         memcpy(&current_x, &temp, 4);
         temp = (adv_buf[9]<<24) + (adv_buf[10]<<16) + (adv_buf[11]<<8) + adv_buf[12];
         memcpy(&current_y, &temp, 4);
+        
+        srand((unsigned int) ((current_x*current_y +2)*100));
         current_angle = adv_buf[13]*2;
         //printf("Current x: %f\n", current_x);
         //printf("Current y: %f\n", current_y);
@@ -278,6 +276,8 @@ int main(void) {
   float deviation = 0;
   float distance = 0;
   float distanceObstacle = 0;
+  
+  float distance_to_back_up = 0.15;
 
   float speed_correction=0, min_rotation_speed = 50;
 
@@ -308,7 +308,7 @@ int main(void) {
         kobukiDriveDirect(0,0);
         state = OFF;
 
-        if (is_button_pressed(&sensors) || master != 0) {
+        if (is_button_pressed(&sensors) || (master != 0 && master!=3)) {
           state = RANDOM;
           //printf("ALIGNING\n");
         } else {
@@ -336,6 +336,7 @@ int main(void) {
           previous_state = RANDOM;
           state = OBSTACLE_BACK_UP;
           distanceObstacle = 0;
+          distance_to_back_up = 0.05 + 0.15*(float)((double)rand())/((double) RAND_MAX);
         } else {
           display_write("I SEE NO ONE", DISPLAY_LINE_0);
           //kobukiDriveDirect(0,0);
@@ -378,6 +379,8 @@ int main(void) {
           } else if (sensors.bumps_wheelDrops.bumpLeft || sensors.bumps_wheelDrops.bumpRight || sensors.bumps_wheelDrops.bumpCenter) {
             previous_state = ALIGNING;
             state = OBSTACLE_BACK_UP;
+            
+            distance_to_back_up = 0.05 + 0.15*(float)((double)rand())/((double) RAND_MAX);
             distanceObstacle = 0;
             prev_encoder = sensors.rightWheelEncoder;
           } else if (abs(deviation) >= abs(angle_to_turn)) { // if we turned enough
@@ -418,10 +421,19 @@ int main(void) {
           display_write("", DISPLAY_LINE_1);
         } else if (sensors.bumps_wheelDrops.bumpLeft || sensors.bumps_wheelDrops.bumpRight || sensors.bumps_wheelDrops.bumpCenter) {
           previous_state = GOING_BACK;
-          state = OBSTACLE_BACK_UP;
+          state = OBSTACLE_BACK_UP;          
+          distance_to_back_up = 0.05 + 0.15*(float)((double)rand())/((double) RAND_MAX);
           distanceObstacle = 0;
+          time = 0;
           prev_encoder = sensors.rightWheelEncoder;
-        } else if (distance >= distance_to_target) {
+        } else if (master==3) {
+            previous_state = OFF;
+            state = OBSTACLE_BACK_UP;          
+            distance_to_back_up = 0.05 + 0.15*(float)((double)rand())/((double) RAND_MAX);
+            distanceObstacle = 0;
+            time = 0;
+prev_encoder = sensors.rightWheelEncoder;
+        }else if (distance >= distance_to_target) {
           state = ORIENTING;
           deviation = 0;
         } else {
@@ -455,6 +467,7 @@ int main(void) {
           previous_state = ORIENTING;
           state = OBSTACLE_BACK_UP;
           distanceObstacle = 0;
+          time = 0;
           prev_encoder = sensors.rightWheelEncoder;
         } else if (abs(deviation-angle_to_turn) >= abs(final_alpha-angle_to_turn)) {
             state = OFF;
@@ -492,10 +505,10 @@ int main(void) {
         char buf[16];
         snprintf(buf,16,"%f", distanceObstacle);
         display_write(buf, DISPLAY_LINE_1);
-        if (is_button_pressed(&sensors)) {
+        if (is_button_pressed(&sensors) || master==0) {
           state = OFF;
           display_write("", DISPLAY_LINE_1);
-        } else if (distanceObstacle >= 0.15) {
+        } else if (distanceObstacle >= distance_to_back_up) {
           kobukiDriveDirect(0,0);
           time = time+1;
           if(time > 5){
