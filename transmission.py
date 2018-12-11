@@ -19,7 +19,7 @@ kobuki_moving = False
 run = 1
 gesture_id = 0
 current_gesture = "None"
-master = [0]
+master = [0, 0, 0]
 
 def float_to_hex(f):
     return hex(struct.unpack('<I', struct.pack('<f', f))[0]).lstrip("0x")
@@ -78,7 +78,7 @@ def on_message(client, userdata, message):
             prevDeg[temp_id] = deg
             currPos[temp_id] = (xPos, yPos)
             currDeg[temp_id] = deg
-            if(abs(xPos)>0.5 or abs(yPos)>0.5):         #If the kobuki is leaving the camera's field of vision
+            if(abs(xPos)>0.65 or abs(yPos)>0.65):         #If the kobuki is leaving the camera's field of vision
                 master[temp_id] = 3
             message_queued = True
             kobuki_moving = True
@@ -102,17 +102,95 @@ def on_message(client, userdata, message):
         current_gesture = str(message.payload.decode("utf-8"))
         if current_gesture == "ZoomIn":
             master = [2, 2, 2]
-            targetPos[0] = (0.5, 0)
-            targetPos[1] = (0, 0)
-            targetPos[2] = (-0.5, 0)
-            targetDeg[0] = 90
-            targetDeg[1] = 90
-            targetDeg[2] = 90
+            assign_reference_positions()
         elif current_gesture == "ZoomOut":
             master = [1, 1, 1]
-        elif current_gesture == "Off":
+        elif current_gesture == "WaveRight" or current_gesture == "WaveLeft":
             master = [0, 0, 0]
+        elif current_gesture == "SwipeRight":
+            master = [2, 2, 2]
+            translation_to_y_positive()
+        elif current_gesture == "SwipeLeft":
+            master = [2, 2, 2]
+            translation_to_y_negative()
+        elif current_gesture == "Turn0":
+            master = [2, 2, 2]            
+            targetPos[0] = currPos[0]     
+            targetPos[1] = currPos[1]     
+            targetPos[2] = currPos[2]
+            targetDeg[0] = 0
+            targetDeg[1] = 0
+            targetDeg[2] = 0
+        elif current_gesture == "Turn180":
+            master = [2, 2, 2]            
+            targetPos[0] = currPos[0]     
+            targetPos[1] = currPos[1]     
+            targetPos[2] = currPos[2]
+            targetDeg[0] = 180
+            targetDeg[1] = 180
+            targetDeg[2] = 180
+        else:
+            gesture_id -= 1
         gesture_id += 1
+
+def order_by_x():
+    a=0
+    b=1
+    c=2
+    if currPos[0][0]>currPos[1][0]:
+        if currPos[2][0]>currPos[0][0]:
+            a=2
+            b=0
+            c=1
+        elif currPos[2][0]>currPos[1][0]:
+            a=0
+            b=2
+            c=1
+        else:
+            a=0
+            b=1
+            c=2
+    else:
+        if currPos[2][0]>currPos[1][0]:
+            a=2
+            b=1
+            c=0
+        elif currPos[2][0]>currPos[0][0]:
+            a=1
+            b=2
+            c=0
+        else:
+            a=1
+            b=0
+            c=2
+    return (a,b,c)
+    
+def assign_reference_positions():
+    a,b,c = order_by_x()
+    targetPos[a] = (0.5, 0)
+    targetPos[b] = (0, 0)
+    targetPos[c] = (-0.5, 0)
+    targetDeg[0] = 90
+    targetDeg[1] = 90
+    targetDeg[2] = 90
+
+def translation_to_y_positive():
+    a,b,c = order_by_x()
+    targetPos[a] = (0.5, 0.3)
+    targetPos[b] = (0, 0.3)
+    targetPos[c] = (-0.5, 0.3)
+    targetDeg[0] = 90
+    targetDeg[1] = 90
+    targetDeg[2] = 90
+def translation_to_y_negative():
+    a,b,c = order_by_x()
+    targetPos[a] = (0.5, -0.3)
+    targetPos[b] = (0, -0.3)
+    targetPos[c] = (-0.5, -0.3)
+    targetDeg[0] = 90
+    targetDeg[1] = 90
+    targetDeg[2] = 90
+        
 
 def main():
     global prev_xPos, prev_yPos, run, currPos, kobuki_id, currDeg, targetDeg, gesture_id, current_gesture, master, start_time, stop_time
