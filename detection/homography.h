@@ -21,11 +21,15 @@
 #include <iostream>
 #include <fstream>
 
+#include "position.h"
+
 using namespace cv;
 using namespace std;
 
 Point2f computePositionOnGrid(float x, float y, Mat H);
 Mat getHomography(VideoCapture camera);
+void saveHomographyInFile(Mat H);
+Mat retrieveHomographyFromFile();
 
 #endif /* HOMOGRAPHY_H */
 
