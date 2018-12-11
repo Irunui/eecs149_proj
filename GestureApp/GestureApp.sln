@@ -1,0 +1,54 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28010.2050
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GestureApp", "GestureApp\GestureApp.csproj", "{0A758EF8-629E-4200-B86A-A576BD1BC134}"
+	ProjectSection(ProjectDependencies) = postProject
+		{89E39683-D56D-4604-971B-587C22C62934} = {89E39683-D56D-4604-971B-587C22C62934}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LightBuzz.Vitruvius", "LightBuzz.Vitruvius\LightBuzz.Vitruvius.csproj", "{89E39683-D56D-4604-971B-587C22C62934}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0A758EF8-629E-4200-B86A-A576BD1BC134}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0A758EF8-629E-4200-B86A-A576BD1BC134}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0A758EF8-629E-4200-B86A-A576BD1BC134}.Debug|x64.ActiveCfg = Debug|x64
+		{0A758EF8-629E-4200-B86A-A576BD1BC134}.Debug|x64.Build.0 = Debug|x64
+		{0A758EF8-629E-4200-B86A-A576BD1BC134}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{0A758EF8-629E-4200-B86A-A576BD1BC134}.Debug|x86.Build.0 = Debug|Any CPU
+		{0A758EF8-629E-4200-B86A-A576BD1BC134}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0A758EF8-629E-4200-B86A-A576BD1BC134}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0A758EF8-629E-4200-B86A-A576BD1BC134}.Release|x64.ActiveCfg = Release|x64
+		{0A758EF8-629E-4200-B86A-A576BD1BC134}.Release|x64.Build.0 = Release|x64
+		{0A758EF8-629E-4200-B86A-A576BD1BC134}.Release|x86.ActiveCfg = Release|Any CPU
+		{0A758EF8-629E-4200-B86A-A576BD1BC134}.Release|x86.Build.0 = Release|Any CPU
+		{89E39683-D56D-4604-971B-587C22C62934}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{89E39683-D56D-4604-971B-587C22C62934}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{89E39683-D56D-4604-971B-587C22C62934}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{89E39683-D56D-4604-971B-587C22C62934}.Debug|x64.Build.0 = Debug|Any CPU
+		{89E39683-D56D-4604-971B-587C22C62934}.Debug|x86.ActiveCfg = Debug|x86
+		{89E39683-D56D-4604-971B-587C22C62934}.Debug|x86.Build.0 = Debug|x86
+		{89E39683-D56D-4604-971B-587C22C62934}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{89E39683-D56D-4604-971B-587C22C62934}.Release|Any CPU.Build.0 = Release|Any CPU
+		{89E39683-D56D-4604-971B-587C22C62934}.Release|x64.ActiveCfg = Release|Any CPU
+		{89E39683-D56D-4604-971B-587C22C62934}.Release|x64.Build.0 = Release|Any CPU
+		{89E39683-D56D-4604-971B-587C22C62934}.Release|x86.ActiveCfg = Release|x86
+		{89E39683-D56D-4604-971B-587C22C62934}.Release|x86.Build.0 = Release|x86
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4F658652-2A5D-4AA8-9CFF-62EDCD00010E}
+	EndGlobalSection
+EndGlobal
