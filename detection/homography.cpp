@@ -49,8 +49,15 @@ void onMouseImage(int event, int x, int y, int foo, void* data) {
         Point2f m(x, y);
         circle(I, m, 6, Scalar(0, 0, 255), 2); 
         imshow("image", I);
+    } else {
+        cout << "clic" << endl;
+        Point2f m = computePositionOnGrid(x,y,D->H);
+
+        circle(D->I2, m, 6, Scalar(0, 255, 0), 2);
+        imshow("grid", D->I2);
     }
 }
+
 
 /*
  * Handles a click on the grid image
@@ -74,6 +81,12 @@ void onMouseGrid(int event, int x, int y, int foo, void* data) {
 Mat getHomography(VideoCapture camera) {
     Mat I1, I2;
     Data D;
+    cout << "Retrieve Homography from file ? 1/0" << endl;
+    int answer;
+    cin >> answer;
+    if (answer==1) {
+        return retrieveHomographyFromFile();
+    }
     if (camera.isOpened()) {
         // getting image from live stream. Repetition to avoid buffering
         camera >> I1;
@@ -107,6 +120,48 @@ Mat getHomography(VideoCapture camera) {
 
         D.H = findHomography(D.pointsI1, D.pointsI2, CV_RANSAC);
     }
+    for (int i =0 ;i < 2 ; i++) {
+        cout << "Press a key (multiple times) to stop checking the homography" << endl;
+        waitKey(0);
+    }
+    for (int i=0 ; i < 3 ; i++) {
+        for (int j=0 ; j < 3 ; j++) {
+            cout << D.H.at<double>(i,j) << endl;
+        }
+    }
+    saveHomographyInFile(D.H);
     return D.H;
 }
 
+void saveHomographyInFile(Mat H) {
+    ofstream file;
+    file.open ("homography.txt");
+    for (int i=0 ; i < 3 ; i++) {
+        for (int j=0 ; j < 3 ; j++) {
+            file << H.at<double>(i,j) << "\n";
+        }
+    }
+    file.close();
+}
+
+Mat retrieveHomographyFromFile() {
+    Mat H = Mat::zeros(cv::Size(3, 3), CV_64FC1);
+    fstream file;
+    file.open ("homography.txt", ios::in);
+    double temp;
+    for (int i=0 ; i < 3 ; i++) {
+        for (int j=0 ; j < 3 ; j++) {
+            file >> temp;
+            H.at<double>(i,j) =  temp;
+        }
+    }
+    for (int i=0 ; i < 3 ; i++) {
+        for (int j=0 ; j < 3 ; j++) {
+            cout << H.at<double>(i,j) << endl;
+        }
+    }
+    cout << get_angle_transformation(H, 200, 100) << endl;
+    waitKey(0);
+    file.close();
+    return H;
+}
